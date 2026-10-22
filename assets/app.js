@@ -351,12 +351,17 @@ $('btnApply').addEventListener('click', () => {
   cfg.from = parseInt($('rFrom').value, 10) || 1;
   cfg.to = parseInt($('rTo').value, 10) || VOCAB.length;
   save(); restart(); fillSettings();
-  $('panel').classList.remove('open'); $('btnSettings').setAttribute('aria-pressed', 'false');
+  setPanel(false);
 });
-$('btnSettings').addEventListener('click', () => {
-  const open = $('panel').classList.toggle('open');
+// Mở/đóng cài đặt; khi đang mở thì ẩn khu vực học (tiến độ, thẻ, nút điều hướng)
+function setPanel(open) {
+  $('panel').classList.toggle('open', open);
+  $('study').hidden = open;
   $('btnSettings').setAttribute('aria-pressed', String(open));
   if (open) fillSettings();
+}
+$('btnSettings').addEventListener('click', () => {
+  setPanel(!$('panel').classList.contains('open'));
 });
 $('btnShuffle').addEventListener('click', restart);
 
@@ -371,7 +376,7 @@ $('scene').addEventListener('click', e => {
   flip();
 });
 document.addEventListener('keydown', e => {
-  if (e.target.tagName === 'INPUT') return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT' || $('panel').classList.contains('open')) return;
   if (e.key === 'ArrowRight') { next(); e.preventDefault(); }
   else if (e.key === 'ArrowLeft') { prev(); e.preventDefault(); }
   else if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown') { flip(); e.preventDefault(); }
@@ -512,7 +517,7 @@ async function importFile(file) {
     try { localStorage.removeItem(progressKey(id)); } catch (e) {}
     switchDeck(id);
     showImportMsg(t.importOk(vocab.length, name), 'ok');
-    $('panel').classList.add('open'); $('btnSettings').setAttribute('aria-pressed', 'true');
+    setPanel(true);
   } catch (err) {
     console.error(err);
     showImportMsg(t.importBad, 'err');
@@ -541,7 +546,7 @@ function switchDeck(id) {
 $('selDeck').addEventListener('change', e => {
   showImportMsg('');
   switchDeck(e.target.value);
-  $('panel').classList.remove('open'); $('btnSettings').setAttribute('aria-pressed', 'false');
+  setPanel(false);
 });
 $('btnImport').addEventListener('click', () => $('fileXlsx').click());
 $('fileXlsx').addEventListener('change', e => {

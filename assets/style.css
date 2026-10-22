@@ -109,6 +109,8 @@ kbd { font-family: inherit; font-size: 11px; border: 1px solid var(--line); bord
   display: none; flex-direction: column; gap: 14px;
 }
 .panel.open { display: flex; }
+.study { display: flex; flex-direction: column; gap: 14px; }
+.study[hidden] { display: none; }
 .row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .row label.title { font-size: 14px; font-weight: 600; }
 .row .desc { font-size: 12px; color: var(--muted); width: 100%; margin-top: -8px; }
