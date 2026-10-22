@@ -1,0 +1,5 @@
+.DS_Store
+# Tài liệu gốc của người khác - không đưa lên GitHub
+reference/
+__pycache__/
+.env

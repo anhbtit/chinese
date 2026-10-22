@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flashcard</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Flashcard <span id="deckName">HSK1</span></h1>
+    <div style="display:flex;gap:8px">
+      <button class="icon-btn" id="btnShuffle" data-i18n-title="shuffleTitle">⤮ <span class="txt" data-i18n="shuffle"></span></button>
+      <button class="icon-btn" id="btnSettings" aria-pressed="false" data-i18n-title="settings">⚙︎ <span class="txt" data-i18n="settings"></span></button>
+    </div>
+  </header>
+
+  <section class="panel" id="panel">
+    <div class="row">
+      <label class="title" data-i18n="deck"></label>
+      <select class="sel" id="selDeck"></select>
+      <div class="actions" style="width:100%">
+        <button class="icon-btn" id="btnImport" data-i18n="importXlsx"></button>
+        <button class="icon-btn" id="btnDelDeck" data-i18n="delDeck"></button>
+        <input type="file" id="fileXlsx" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
+      </div>
+      <div class="desc" data-i18n="importHint"></div>
+      <div class="msg" id="importMsg" hidden></div>
+    </div>
+    <div class="row">
+      <label class="title">Language / Ngôn ngữ</label>
+      <div class="seg" id="segLang">
+        <button data-v="en">English</button>
+        <button data-v="vi">Tiếng Việt</button>
+      </div>
+    </div>
+    <div class="row">
+      <label class="title" data-i18n="order"></label>
+      <div class="seg" id="segOrder">
+        <button data-v="random" data-i18n="random"></button>
+        <button data-v="seq" data-i18n="seq"></button>
+      </div>
+    </div>
+    <div class="row">
+      <label class="title" data-i18n="noRepeat"></label>
+      <label class="switch"><input type="checkbox" id="optNoRepeat"><span></span></label>
+      <div class="desc" data-i18n="noRepeatDesc"></div>
+    </div>
+    <div class="row">
+      <label class="title" data-i18n="range"></label>
+      <div class="range">
+        <input type="number" id="rFrom" min="1" max="500"> –
+        <input type="number" id="rTo" min="1" max="500">
+      </div>
+    </div>
+    <div class="row">
+      <label class="title" data-i18n="front"></label>
+      <div class="seg" id="segFront">
+        <button data-v="hz" data-i18n="frontHz"></button>
+        <button data-v="vi" data-i18n="frontMeaning"></button>
+        <button data-v="all" data-i18n="frontAll"></button>
+      </div>
+    </div>
+    <div class="row">
+      <label class="title" data-i18n="showPinyin"></label>
+      <label class="switch"><input type="checkbox" id="optPinyin"><span></span></label>
+    </div>
+    <div class="row">
+      <label class="title" data-i18n="showExample"></label>
+      <label class="switch"><input type="checkbox" id="optExample"><span></span></label>
+    </div>
+    <div class="row">
+      <label class="title" data-i18n="autoSpeak"></label>
+      <label class="switch"><input type="checkbox" id="optAutoSpeak"><span></span></label>
+    </div>
+    <div class="row">
+      <label class="title" data-i18n="audioSrc"></label>
+      <div class="seg" id="segAudio">
+        <button data-v="azure">Azure (mp3)</button>
+        <button data-v="browser" data-i18n="audioBrowser"></button>
+      </div>
+      <div class="desc" id="audioStatus"></div>
+    </div>
+    <div class="row">
+      <label class="title" data-i18n="theme"></label>
+      <div class="seg" id="segTheme">
+        <button data-v="auto" data-i18n="themeAuto"></button>
+        <button data-v="light" data-i18n="themeLight"></button>
+        <button data-v="dark" data-i18n="themeDark"></button>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="icon-btn" id="btnApply" data-i18n="apply"></button>
+    </div>
+  </section>
+
+  <div>
+    <div class="status"><span id="stPos">–</span><span id="stMode">–</span></div>
+    <div class="bar" style="margin-top:6px"><div id="stBar"></div></div>
+  </div>
+
+  <div class="scene" id="scene" data-i18n-title="flipHint">
+    <div class="card" id="card">
+      <div class="face front" id="front"></div>
+      <div class="face back" id="back"></div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="nav-btn" id="btnPrev">← <span class="lbl" data-i18n="prev"></span></button>
+    <button class="flip-btn" id="btnFlip" data-i18n-title="flip">⟲</button>
+    <button class="nav-btn primary" id="btnNext"><span class="lbl" data-i18n="next"></span> →</button>
+  </div>
+  <div class="keys" data-i18n-html="keys"></div>
+</div>
+
+<script src="assets/hsk1-data.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
