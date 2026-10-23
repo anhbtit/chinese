@@ -275,7 +275,6 @@ function speakTTS(text, g) {
 // Mỗi lần bấm đọc luân phiên giọng nam (m) / nữ (f); file ở audio/<m|f>/<w|x>/<STT>.mp3.
 const audioFiles = { m: { w: new Set(), x: new Set() }, f: { w: new Set(), x: new Set() } };
 let nextGender = 'm';
-const GENDER_MARK = { m: '♂', f: '♀' };
 const player = new Audio();
 function loadAudioIndex() {
   const s = document.createElement('script');
@@ -304,7 +303,6 @@ function speak(kind = 'w') {
   const text = kind === 'x' ? v.x[0] : v.hz.split('｜')[0].replace(/\(.*?\)/g, '').trim();
   const g = nextGender;                        // luân phiên: lần 1 nam, lần 2 nữ, lần 3 nam…
   nextGender = g === 'm' ? 'f' : 'm';
-  document.querySelectorAll('[data-speak],[data-speak-ex]').forEach(b => { b.textContent = '🔊' + GENDER_MARK[g]; });
   // thiếu file của giọng này thì dùng file của giọng kia (nếu có) trước khi dùng giọng trình duyệt
   const src = [g, g === 'm' ? 'f' : 'm'].find(x => audioFiles[x][kind].has(v.id));
   if (cfg.audio === 'google' && isBuiltin() && src) {
