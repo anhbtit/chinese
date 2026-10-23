@@ -29,7 +29,7 @@ import time
 import unicodedata
 import urllib.error
 import urllib.request
-from xml.sax.saxutils import escape
+from xml.sax.saxutils import escape, unescape
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PAGE = os.path.join(ROOT, 'assets', 'hsk1-data.js')
@@ -169,8 +169,13 @@ def ssml(body):
 
 # ---------- Google Cloud TTS ----------
 def synth(key, xml, voice, rate, retries=6):
+    if 'Chirp' in voice:   # Chirp3-HD không nhận SSML: gửi văn bản thuần (mất việc ép pinyin)
+        text = re.sub(r'<[^>]+>', '', xml.replace('<break time="400ms"/>', '， '))
+        inp = {'text': unescape(text)}
+    else:
+        inp = {'ssml': xml}
     payload = {
-        'input': {'ssml': xml},
+        'input': inp,
         'voice': {'languageCode': 'cmn-CN', 'name': voice},
         'audioConfig': {'audioEncoding': 'MP3', 'speakingRate': rate, 'sampleRateHertz': 24000},
     }
@@ -297,7 +302,7 @@ def main():
             try:
                 data = synth(key, xml, voices[g], rate)
             except RuntimeError as e:
-                if 'does not exist' in str(e) or 'voice' in str(e).lower() and 'HTTP 400' in str(e):
+                if 'does not exist' in str(e):
                     sys.exit(f'Giọng "{voices[g]}" không hợp lệ: chạy --list-voices để xem tên đúng.\n{e}')
                 if kind == 'w' and 'HTTP 400' in str(e) and '<phoneme' in xml:
                     print('    Google không nhận pinyin, đọc chữ Hán thường.')
