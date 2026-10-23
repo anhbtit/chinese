@@ -9,7 +9,7 @@ index.html            trang chính
 assets/style.css      giao diện
 assets/app.js         logic (thẻ, cài đặt, nhập Excel, phát âm)
 assets/hsk1-data.js   bộ 500 từ HSK1 có sẵn
-audio/                mp3 phát âm (tuỳ chọn, tạo bằng tools/google_tts.py)
+audio/{m,f}/{w,x}/    mp3 phát âm giọng nam/nữ (tuỳ chọn, tạo bằng tools/google_tts.py)
 tools/google_tts.py   tạo audio bằng Google Cloud Text-to-Speech
 reference/            tài liệu gốc (không đưa lên git)
 ```
@@ -34,7 +34,7 @@ export GOOGLE_TTS_API_KEY=...   # API key của project đã bật Cloud Text-to
 python3 tools/google_tts.py --dry-run   # xem trước, không gọi API
 python3 tools/google_tts.py
 ```
-Kết quả nằm trong `audio/` – commit thư mục này để trang dùng giọng Google. Không commit key.
+Script tạo cả giọng nam (`cmn-CN-Wavenet-B`) và nữ (`cmn-CN-Wavenet-A`); đổi bằng `--voice-male` / `--voice-female`, hoặc `--gender m|f` để chỉ tạo một giọng. Trên trang, mỗi lần bấm loa (hoặc phím S/E) đọc luân phiên nam → nữ → nam… Kết quả nằm trong `audio/` – commit thư mục này để trang dùng giọng Google. Không commit key.
 
 ## Đưa lên GitHub Pages
 

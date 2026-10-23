@@ -15,7 +15,7 @@ const STR = {
     noRepeat: 'No repeats', noRepeatDesc: 'On: go through every card before reshuffling. Off: each Next picks a fully random card (may repeat).',
     range: 'Word range (No.)', front: 'Card front', frontHz: 'Chinese', frontMeaning: 'Meaning', frontAll: 'Everything',
     showPinyin: 'Show pinyin on front', showExample: 'Show example sentence', example: 'Example', listenEx: 'Play the example', autoSpeak: 'Auto-play audio on new card', audioSrc: 'Pronunciation source', audioBrowser: 'Browser voice',
-    audioStatus: (w, x, n) => `Google audio found: ${w}/${n} words, ${x}/${n} examples. Missing files fall back to the browser voice.`,
+    audioStatus: (c, n) => `Google audio found – male: ${c.m.w}/${n} words, ${c.m.x}/${n} examples · female: ${c.f.w}/${n} words, ${c.f.x}/${n} examples. Each press alternates male / female; missing files fall back to the browser voice.`,
     audioNone: 'No Google audio yet (run tools/google_tts.py). Using the browser voice for now.',
     theme: 'Theme', themeAuto: 'Auto', themeLight: 'Light', themeDark: 'Dark', apply: 'Apply & restart',
     flipHint: 'Click to flip', flip: 'Flip card', prev: 'Prev', next: 'Next', listen: 'Play pronunciation',
@@ -38,7 +38,7 @@ const STR = {
     noRepeat: 'Không lặp lại', noRepeatDesc: 'Bật: đi hết các thẻ rồi mới xáo lại. Tắt: mỗi lần Next chọn ngẫu nhiên hoàn toàn (có thể trùng).',
     range: 'Phạm vi STT', front: 'Mặt trước', frontHz: 'Tiếng Trung', frontMeaning: 'Nghĩa', frontAll: 'Hiện hết',
     showPinyin: 'Hiện pinyin ở mặt trước', showExample: 'Hiện câu ví dụ', example: 'Ví dụ', listenEx: 'Nghe câu ví dụ', autoSpeak: 'Tự đọc khi lật sang thẻ mới', audioSrc: 'Nguồn phát âm', audioBrowser: 'Giọng trình duyệt',
-    audioStatus: (w, x, n) => `Đã có audio Google: ${w}/${n} từ, ${x}/${n} câu ví dụ. Thiếu file nào thì dùng giọng trình duyệt.`,
+    audioStatus: (c, n) => `Đã có audio Google – nam: ${c.m.w}/${n} từ, ${c.m.x}/${n} câu ví dụ · nữ: ${c.f.w}/${n} từ, ${c.f.x}/${n} câu ví dụ. Mỗi lần bấm đọc luân phiên nam / nữ; thiếu file nào thì dùng giọng trình duyệt.`,
     audioNone: 'Chưa có audio Google (chạy tools/google_tts.py). Tạm thời dùng giọng trình duyệt.',
     theme: 'Giao diện', themeAuto: 'Tự động', themeLight: 'Sáng', themeDark: 'Tối', apply: 'Áp dụng & bắt đầu lại',
     flipHint: 'Bấm để lật thẻ', flip: 'Lật thẻ', prev: 'Trước', next: 'Tiếp', listen: 'Nghe phát âm',
@@ -244,39 +244,56 @@ function render() {
 function flip() { $('card').classList.toggle('flipped'); }
 
 let zhVoice = null;
+let zhVoices = { m: null, f: null };
 function loadVoice() {
   const vs = speechSynthesis.getVoices();
-  zhVoice = vs.find(v => /zh[-_]CN/i.test(v.lang)) || vs.find(v => /^zh/i.test(v.lang)) || null;
+  const zh = vs.filter(v => /^zh/i.test(v.lang));
+  const pick = a => a.find(v => /zh[-_]CN/i.test(v.lang)) || a[0] || null;
+  zhVoice = pick(zh);
+  // chọn giọng trình duyệt theo giới tính nếu đoán được qua tên; không thì dùng chung 1 giọng và đổi cao độ
+  const isMale = v => /(^|[^a-z])male([^a-z]|$)|yunxi|yunjian|yunyang|kangkang|liwei|li-mu|zhiwei/i.test(v.name) && !/female/i.test(v.name);
+  const isFemale = v => /female|xiaoxiao|xiaoyi|tingting|huihui|yaoyao|meijia|lili|ting-ting/i.test(v.name);
+  zhVoices = { m: pick(zh.filter(isMale)), f: pick(zh.filter(isFemale)) };
 }
 if ('speechSynthesis' in window) { loadVoice(); speechSynthesis.onvoiceschanged = loadVoice; }
-function speakTTS(text) {
+function speakTTS(text, g) {
   if (!('speechSynthesis' in window)) return;
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
   u.lang = 'zh-CN'; u.rate = .8;
-  if (zhVoice) u.voice = zhVoice;
+  const own = g && zhVoices[g];
+  if (own) u.voice = own;
+  else {
+    if (zhVoice) u.voice = zhVoice;
+    if (g) u.pitch = g === 'm' ? .6 : 1.25;   // không có giọng riêng: phân biệt nam/nữ bằng cao độ
+  }
   speechSynthesis.speak(u);
 }
 
-// File mp3 tạo bởi tools/google_tts.py: audio/w/<STT>.mp3 (từ), audio/x/<STT>.mp3 (câu ví dụ).
-// audio/index.js khai báo window.HSK_AUDIO = {w: [STT...], x: [STT...]} để biết file nào có sẵn.
-const audioFiles = { w: new Set(), x: new Set() };
+// File mp3 tạo bởi tools/google_tts.py: audio/<m|f>/w/<STT>.mp3 (từ), audio/<m|f>/x/<STT>.mp3 (câu ví dụ).
+// audio/index.js khai báo window.HSK_AUDIO = {m: {w: [STT...], x: [STT...]}, f: {...}} để biết file nào có sẵn.
+// Mỗi lần bấm đọc luân phiên giọng nam (m) / nữ (f); file ở audio/<m|f>/<w|x>/<STT>.mp3.
+const audioFiles = { m: { w: new Set(), x: new Set() }, f: { w: new Set(), x: new Set() } };
+let nextGender = 'm';
+const GENDER_MARK = { m: '♂', f: '♀' };
 const player = new Audio();
 function loadAudioIndex() {
   const s = document.createElement('script');
   s.src = 'audio/index.js';
   s.onload = () => {
     const a = window.HSK_AUDIO || {};
-    audioFiles.w = new Set(a.w || []); audioFiles.x = new Set(a.x || []);
+    for (const g of ['m', 'f']) audioFiles[g] = { w: new Set((a[g] || {}).w || []), x: new Set((a[g] || {}).x || []) };
     updateAudioStatus();
   };
   s.onerror = updateAudioStatus;
   document.head.appendChild(s);
 }
 function updateAudioStatus() {
-  const t = T(), w = audioFiles.w.size, x = audioFiles.x.size;
+  const t = T(), c = {};
+  for (const g of ['m', 'f']) c[g] = { w: audioFiles[g].w.size, x: audioFiles[g].x.size };
   if (!isBuiltin()) { $('audioStatus').textContent = t.audioCustom; return; }
-  $('audioStatus').textContent = w || x ? t.audioStatus(w, x, VOCAB.length) : t.audioNone;
+  const any = c.m.w + c.m.x + c.f.w + c.f.x > 0;
+  $('audioStatus').textContent = any ? t.audioStatus(c, VOCAB.length) : t.audioNone;
 }
 
 // kind: 'w' = đọc từ, 'x' = đọc câu ví dụ
@@ -285,15 +302,20 @@ function speak(kind = 'w') {
   const v = VOCAB[history[pos]];
   if (kind === 'x' && !v.x) return;
   const text = kind === 'x' ? v.x[0] : v.hz.split('｜')[0].replace(/\(.*?\)/g, '').trim();
-  if (cfg.audio === 'google' && isBuiltin() && audioFiles[kind].has(v.id)) {
+  const g = nextGender;                        // luân phiên: lần 1 nam, lần 2 nữ, lần 3 nam…
+  nextGender = g === 'm' ? 'f' : 'm';
+  document.querySelectorAll('[data-speak],[data-speak-ex]').forEach(b => { b.textContent = '🔊' + GENDER_MARK[g]; });
+  // thiếu file của giọng này thì dùng file của giọng kia (nếu có) trước khi dùng giọng trình duyệt
+  const src = [g, g === 'm' ? 'f' : 'm'].find(x => audioFiles[x][kind].has(v.id));
+  if (cfg.audio === 'google' && isBuiltin() && src) {
     if ('speechSynthesis' in window) speechSynthesis.cancel();
     player.pause();
-    player.src = `audio/${kind}/${v.id}.mp3`;
-    player.play().catch(err => { if (err.name !== 'AbortError') speakTTS(text); });
+    player.src = `audio/${src}/${kind}/${v.id}.mp3`;
+    player.play().catch(err => { if (err.name !== 'AbortError') speakTTS(text, g); });
     return;
   }
   player.pause();
-  speakTTS(text);
+  speakTTS(text, g);
 }
 
 // ----- settings UI -----
