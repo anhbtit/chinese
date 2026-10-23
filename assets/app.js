@@ -14,6 +14,7 @@ const STR = {
     order: 'Next order', random: 'Random', seq: 'By number',
     noRepeat: 'No repeats', noRepeatDesc: 'On: go through every card before reshuffling. Off: each Next picks a fully random card (may repeat).',
     range: 'Word range (No.)', front: 'Card front', frontHz: 'Chinese', frontMeaning: 'Meaning', frontAll: 'Everything',
+    speed: 'Playback speed',
     showPinyin: 'Show pinyin on front', showExample: 'Show example sentence', example: 'Example', listenEx: 'Play the example', autoSpeak: 'Auto-play audio on new card', audioSrc: 'Pronunciation source', audioBrowser: 'Browser voice',
     audioStatus: (c, n) => `Google audio found – male: ${c.m.w}/${n} words, ${c.m.x}/${n} examples · female: ${c.f.w}/${n} words, ${c.f.x}/${n} examples. Each press alternates male / female; missing files fall back to the browser voice.`,
     audioNone: 'No Google audio yet (run tools/google_tts.py). Using the browser voice for now.',
@@ -37,6 +38,7 @@ const STR = {
     order: 'Thứ tự khi Next', random: 'Ngẫu nhiên', seq: 'Theo STT',
     noRepeat: 'Không lặp lại', noRepeatDesc: 'Bật: đi hết các thẻ rồi mới xáo lại. Tắt: mỗi lần Next chọn ngẫu nhiên hoàn toàn (có thể trùng).',
     range: 'Phạm vi STT', front: 'Mặt trước', frontHz: 'Tiếng Trung', frontMeaning: 'Nghĩa', frontAll: 'Hiện hết',
+    speed: 'Tốc độ phát âm',
     showPinyin: 'Hiện pinyin ở mặt trước', showExample: 'Hiện câu ví dụ', example: 'Ví dụ', listenEx: 'Nghe câu ví dụ', autoSpeak: 'Tự đọc khi lật sang thẻ mới', audioSrc: 'Nguồn phát âm', audioBrowser: 'Giọng trình duyệt',
     audioStatus: (c, n) => `Đã có audio Google – nam: ${c.m.w}/${n} từ, ${c.m.x}/${n} câu ví dụ · nữ: ${c.f.w}/${n} từ, ${c.f.x}/${n} câu ví dụ. Mỗi lần bấm đọc luân phiên nam / nữ; thiếu file nào thì dùng giọng trình duyệt.`,
     audioNone: 'Chưa có audio Google (chạy tools/google_tts.py). Tạm thời dùng giọng trình duyệt.',
@@ -54,7 +56,7 @@ const POS_EN = {
   'liên từ': 'conjunction', 'hậu tố': 'suffix', 'tiền tố': 'prefix',
 };
 
-const DEFAULTS = { lang: 'en', order: 'random', noRepeat: true, from: 1, to: VOCAB.length, front: 'hz', deck: 'hsk1', pinyin: false, example: true, autoSpeak: false, audio: 'google', theme: 'auto' };
+const DEFAULTS = { lang: 'en', order: 'random', noRepeat: true, from: 1, to: VOCAB.length, front: 'hz', speed: 1, deck: 'hsk1', pinyin: false, example: true, autoSpeak: false, audio: 'google', theme: 'auto' };
 const STORE_KEY = 'hsk1-flashcard-settings';
 let cfg = { ...DEFAULTS };
 try { Object.assign(cfg, JSON.parse(localStorage.getItem(STORE_KEY) || '{}')); } catch (e) {}
@@ -260,7 +262,7 @@ function speakTTS(text, g) {
   if (!('speechSynthesis' in window)) return;
   speechSynthesis.cancel();
   const u = new SpeechSynthesisUtterance(text);
-  u.lang = 'zh-CN'; u.rate = .8;
+  u.lang = 'zh-CN'; u.rate = .8 * cfg.speed;
   const own = g && zhVoices[g];
   if (own) u.voice = own;
   else {
@@ -309,6 +311,7 @@ function speak(kind = 'w') {
     if ('speechSynthesis' in window) speechSynthesis.cancel();
     player.pause();
     player.src = `audio/${src}/${kind}/${v.id}.mp3`;
+    player.defaultPlaybackRate = player.playbackRate = cfg.speed;   // đặt defaultPlaybackRate vì đổi src sẽ reset playbackRate
     player.play().catch(err => { if (err.name !== 'AbortError') speakTTS(text, g); });
     return;
   }
@@ -342,7 +345,7 @@ $('segLang').addEventListener('click', e => {
   }
 });
 function fillSettings() {
-  setSeg('segOrder', cfg.order); setSeg('segFront', cfg.front); setSeg('segTheme', cfg.theme); setSeg('segAudio', cfg.audio);
+  setSeg('segOrder', cfg.order); setSeg('segFront', cfg.front); setSeg('segTheme', cfg.theme); setSeg('segAudio', cfg.audio); setSeg('segSpeed', String(cfg.speed));
   updateAudioStatus();
   $('optNoRepeat').checked = cfg.noRepeat; $('optPinyin').checked = cfg.pinyin; $('optExample').checked = cfg.example; $('optAutoSpeak').checked = cfg.autoSpeak;
   $('rFrom').value = cfg.from; $('rTo').value = cfg.to;
@@ -359,6 +362,11 @@ function fillSettings() {
   });
 });
 $('optPinyin').addEventListener('change', e => { cfg.pinyin = e.target.checked; save(); render(); });
+$('segSpeed').addEventListener('click', e => {
+  if (e.target.tagName !== 'BUTTON') return;
+  cfg.speed = parseFloat(e.target.dataset.v); setSeg('segSpeed', e.target.dataset.v); save();
+  player.defaultPlaybackRate = player.playbackRate = cfg.speed;
+});
 $('optAutoSpeak').addEventListener('change', e => { cfg.autoSpeak = e.target.checked; save(); });
 $('optExample').addEventListener('change', e => {
   cfg.example = e.target.checked; save();
