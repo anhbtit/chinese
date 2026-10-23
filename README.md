@@ -9,8 +9,8 @@ index.html            trang chính
 assets/style.css      giao diện
 assets/app.js         logic (thẻ, cài đặt, nhập Excel, phát âm)
 assets/hsk1-data.js   bộ 500 từ HSK1 có sẵn
-audio/                mp3 phát âm (tuỳ chọn, tạo bằng tools/azure_tts.py)
-tools/azure_tts.py    tạo audio bằng Azure Speech
+audio/                mp3 phát âm (tuỳ chọn, tạo bằng tools/google_tts.py)
+tools/google_tts.py   tạo audio bằng Google Cloud Text-to-Speech
 reference/            tài liệu gốc (không đưa lên git)
 ```
 
@@ -30,10 +30,11 @@ Bộ thẻ nhập vào lưu trong localStorage của trình duyệt, không tả
 ## Tạo audio (tuỳ chọn)
 
 ```
-export AZURE_SPEECH_KEY=...   AZURE_SPEECH_REGION=southeastasia
-python3 tools/azure_tts.py
+export GOOGLE_TTS_API_KEY=...   # API key của project đã bật Cloud Text-to-Speech API
+python3 tools/google_tts.py --dry-run   # xem trước, không gọi API
+python3 tools/google_tts.py
 ```
-Kết quả nằm trong `audio/` – commit thư mục này để trang dùng giọng Azure. Không commit key.
+Kết quả nằm trong `audio/` – commit thư mục này để trang dùng giọng Google. Không commit key.
 
 ## Đưa lên GitHub Pages
 

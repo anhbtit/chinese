@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
-"""Tạo file mp3 phát âm cho flashcard HSK1 bằng Azure Speech (TTS).
+"""Tạo file mp3 phát âm cho flashcard HSK1 bằng Google Cloud Text-to-Speech.
 
-- Từ vựng: đọc theo đúng pinyin trên thẻ (SSML <phoneme alphabet="sapi">), nên chữ đa âm
-  như 地 de/dì, 还 hái/huán, thanh nhẹ 吧/呢/了… đọc đúng như thẻ.
+- Từ vựng: đọc theo đúng pinyin trên thẻ (SSML <phoneme alphabet="pinyin">), nên chữ đa âm
+  như 地 de/dì, 还 hái/huán, thanh nhẹ 吧/呢/了… đọc đúng như thẻ. Từ nào không ép được pinyin
+  (hoặc Google từ chối) thì đọc chữ Hán thường.
 - Câu ví dụ: đọc nguyên câu (ngữ cảnh đủ để TTS chọn đúng âm).
 
-Cần 2 biến môi trường: AZURE_SPEECH_KEY và AZURE_SPEECH_REGION (vd: southeastasia).
+Cần biến môi trường GOOGLE_TTS_API_KEY (API key của project đã bật "Cloud Text-to-Speech API").
+Giọng WaveNet/Neural2 miễn phí 1 triệu ký tự/tháng; bộ HSK1 chỉ dùng vài chục nghìn ký tự.
 
 Cách dùng:
-  python3 tools/azure_tts.py --dry-run           # kiểm tra tách pinyin, không gọi Azure
-  python3 tools/azure_tts.py                     # tạo các file còn thiếu
-  python3 tools/azure_tts.py --only 67,76 --force  # tạo lại vài từ
+  python3 tools/google_tts.py --dry-run           # kiểm tra tách pinyin, không gọi Google
+  python3 tools/google_tts.py                     # tạo các file còn thiếu
+  python3 tools/google_tts.py --only 67,76 --force  # tạo lại vài từ
+  python3 tools/google_tts.py --voice cmn-CN-Neural2-B   # đổi giọng
 Kết quả: audio/w/<STT>.mp3 (từ), audio/x/<STT>.mp3 (câu ví dụ), audio/index.js (danh sách cho trang).
 """
 import argparse
+import base64
 import json
 import os
 import re
@@ -27,8 +31,9 @@ from xml.sax.saxutils import escape
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PAGE = os.path.join(ROOT, 'assets', 'hsk1-data.js')
 OUT = os.path.join(ROOT, 'audio')
+API = 'https://texttospeech.googleapis.com/v1/text:synthesize'
 
-# ---------- pinyin -> SAPI ----------
+# ---------- pinyin -> pinyin có số thanh ----------
 TONED = {}
 for base, marks in {'a': 'āáǎà', 'e': 'ēéěè', 'i': 'īíǐì', 'o': 'ōóǒò', 'u': 'ūúǔù', 'ü': 'ǖǘǚǜ'}.items():
     for t, ch in enumerate(marks, 1):
@@ -74,8 +79,9 @@ def split_chunk(chunk):
     return results
 
 
-def to_sapi(hz, py):
-    """Trả về chuỗi ph cho SAPI, hoặc None nếu không chắc chắn (khi đó đọc chữ Hán bình thường)."""
+def to_pinyin_ph(hz, py):
+    """Trả về chuỗi ph kiểu 'ni3 hao3' cho SSML <phoneme alphabet="pinyin">, hoặc None nếu không chắc chắn
+    (khi đó đọc chữ Hán bình thường). Từ có nhi hoá (…r) cũng trả None vì chưa rõ cú pháp."""
     n_hz = len(re.findall(r'[一-鿿〇]', hz))
     p = unicodedata.normalize('NFC', py.lower())
     p = re.sub(r"//|-|'|’", ' ', p)
@@ -113,10 +119,12 @@ def to_sapi(hz, py):
     combine(0, [], 0)
     if best is None:
         return None
+    if any(er for _, _, er in best):
+        return None
     out = []
-    for s, t, er in best:
-        s = s.replace('üe', 'ue').replace('ü', 'v')
-        out.append(f'{s} r {t}' if er else f'{s} {t}')
+    for s, t, _ in best:
+        s = s.replace('üe', 've').replace('ü', 'v')
+        out.append(f'{s}{t}')
     return ' '.join(out)
 
 
@@ -143,41 +151,42 @@ def word_parts(hz, py):
 def word_ssml_body(hz, py):
     pieces, plain = [], []
     for h, p in word_parts(hz, py):
-        ph = to_sapi(h, p) if p else None
+        ph = to_pinyin_ph(h, p) if p else None
         if ph:
-            pieces.append(f'<phoneme alphabet="sapi" ph="{ph}">{escape(h)}</phoneme>')
+            pieces.append(f'<phoneme alphabet="pinyin" ph="{ph}">{escape(h)}</phoneme>')
         else:
             pieces.append(escape(h))
             plain.append(h)
     return '<break time="400ms"/>'.join(pieces), plain
 
 
-def ssml(body, voice, rate):
-    return ('<speak version="1.0" xmlns="http://www.w3.org/2001/10/synthesis" xml:lang="zh-CN">'
-            f'<voice name="{voice}"><prosody rate="{rate}">{body}</prosody></voice></speak>')
+def ssml(body):
+    return f'<speak>{body}</speak>'
 
 
-# ---------- Azure ----------
-def synth(region, key, xml, retries=6):
-    url = f'https://{region}.tts.speech.microsoft.com/cognitiveservices/v1'
-    req = urllib.request.Request(url, data=xml.encode('utf-8'), method='POST', headers={
-        'Ocp-Apim-Subscription-Key': key,
-        'Content-Type': 'application/ssml+xml',
-        'X-Microsoft-OutputFormat': 'audio-24khz-48kbitrate-mono-mp3',
-        'User-Agent': 'hsk1-flashcard',
+# ---------- Google Cloud TTS ----------
+def synth(key, xml, voice, rate, retries=6):
+    payload = {
+        'input': {'ssml': xml},
+        'voice': {'languageCode': 'cmn-CN', 'name': voice},
+        'audioConfig': {'audioEncoding': 'MP3', 'speakingRate': rate, 'sampleRateHertz': 24000},
+    }
+    req = urllib.request.Request(API, data=json.dumps(payload).encode('utf-8'), method='POST', headers={
+        'X-Goog-Api-Key': key,
+        'Content-Type': 'application/json; charset=utf-8',
     })
     delay = 2
     for attempt in range(retries):
         try:
             with urllib.request.urlopen(req, timeout=30) as r:
-                data = r.read()
-                if not data:
-                    raise RuntimeError('Azure trả về file rỗng')
-                return data
+                audio = json.load(r).get('audioContent')
+                if not audio:
+                    raise RuntimeError('Google trả về file rỗng')
+                return base64.b64decode(audio)
         except urllib.error.HTTPError as e:
             if e.code in (429, 500, 502, 503, 504) and attempt < retries - 1:
                 wait = int(e.headers.get('Retry-After') or delay)
-                print(f'    Azure {e.code}, chờ {wait}s rồi thử lại…')
+                print(f'    Google {e.code}, chờ {wait}s rồi thử lại…')
                 time.sleep(wait)
                 delay = min(delay * 2, 60)
                 continue
@@ -192,10 +201,10 @@ def synth(region, key, xml, retries=6):
 
 
 def load_vocab():
-    html = open(PAGE, encoding='utf-8').read()
-    m = re.search(r'^const HSK1_VOCAB = (.*);$', html, re.M)
+    js = open(PAGE, encoding='utf-8').read()
+    m = re.search(r'^const HSK1_VOCAB = (.*);$', js, re.M)
     if not m:
-        sys.exit(f'Không tìm thấy dữ liệu VOCAB trong {PAGE}')
+        sys.exit(f'Không tìm thấy dữ liệu HSK1_VOCAB trong {PAGE}')
     return json.loads(m.group(1))
 
 
@@ -214,13 +223,13 @@ def write_index(voice):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--voice', default='zh-CN-XiaoxiaoNeural', help='giọng Azure (mặc định: zh-CN-XiaoxiaoNeural)')
-    ap.add_argument('--word-rate', default='-15%', help='tốc độ đọc từ (mặc định -15%%)')
-    ap.add_argument('--example-rate', default='-5%', help='tốc độ đọc câu ví dụ (mặc định -5%%)')
+    ap.add_argument('--voice', default='cmn-CN-Wavenet-A', help='giọng Google (mặc định: cmn-CN-Wavenet-A, nữ)')
+    ap.add_argument('--word-rate', type=float, default=0.85, help='tốc độ đọc từ, 1.0 = bình thường (mặc định 0.85)')
+    ap.add_argument('--example-rate', type=float, default=0.95, help='tốc độ đọc câu ví dụ (mặc định 0.95)')
     ap.add_argument('--only', help='chỉ tạo các STT này, vd: 1,5,67')
     ap.add_argument('--force', action='store_true', help='tạo lại cả file đã có')
     ap.add_argument('--no-examples', action='store_true', help='bỏ qua câu ví dụ')
-    ap.add_argument('--dry-run', action='store_true', help='chỉ in SSML/kiểm tra pinyin, không gọi Azure')
+    ap.add_argument('--dry-run', action='store_true', help='chỉ in SSML/kiểm tra pinyin, không gọi Google')
     args = ap.parse_args()
 
     vocab = load_vocab()
@@ -231,29 +240,29 @@ def main():
     jobs = []
     for v in vocab:
         body, plain = word_ssml_body(v['hz'], v['py'])
-        jobs.append(('w', v['id'], ssml(body, args.voice, args.word_rate), plain, v))
+        jobs.append(('w', v['id'], ssml(body), plain, args.word_rate, v))
         if not args.no_examples and v.get('x'):
-            jobs.append(('x', v['id'], ssml(escape(v['x'][0]), args.voice, args.example_rate), [], v))
+            jobs.append(('x', v['id'], ssml(escape(v['x'][0])), [], args.example_rate, v))
 
     if args.dry_run:
         n_plain = 0
-        for kind, i, xml, plain, v in jobs:
+        for kind, i, xml, plain, _, v in jobs:
             if kind == 'w':
-                body = re.search(r'<prosody[^>]*>(.*)</prosody>', xml).group(1)
                 flag = '  <-- đọc chữ Hán thường (không ép pinyin)' if plain else ''
                 n_plain += bool(plain)
-                print(f'{i:>3} {v["hz"]:<12} {v["py"]:<22} {body}{flag}')
-        print(f'\n{len(jobs)} file sẽ tạo; {n_plain} từ không ép được pinyin.')
+                print(f'{i:>3} {v["hz"]:<12} {v["py"]:<22} {xml[7:-8]}{flag}')
+        chars = sum(len(j[2]) for j in jobs)
+        print(f'\n{len(jobs)} file sẽ tạo (~{chars} ký tự SSML); {n_plain} từ không ép được pinyin.')
         return
 
-    key, region = os.environ.get('AZURE_SPEECH_KEY'), os.environ.get('AZURE_SPEECH_REGION')
-    if not key or not region:
-        sys.exit('Thiếu biến môi trường AZURE_SPEECH_KEY hoặc AZURE_SPEECH_REGION.')
+    key = os.environ.get('GOOGLE_TTS_API_KEY')
+    if not key:
+        sys.exit('Thiếu biến môi trường GOOGLE_TTS_API_KEY.')
 
     os.makedirs(os.path.join(OUT, 'w'), exist_ok=True)
     os.makedirs(os.path.join(OUT, 'x'), exist_ok=True)
     done = skipped = failed = 0
-    for n, (kind, i, xml, plain, v) in enumerate(jobs, 1):
+    for n, (kind, i, xml, plain, rate, v) in enumerate(jobs, 1):
         path = os.path.join(OUT, kind, f'{i}.mp3')
         if not args.force and os.path.exists(path) and os.path.getsize(path) > 0:
             skipped += 1
@@ -262,12 +271,12 @@ def main():
         print(f'[{n}/{len(jobs)}] {kind} #{i} {label}')
         try:
             try:
-                data = synth(region, key, xml)
+                data = synth(key, xml, args.voice, rate)
             except RuntimeError as e:
                 if kind == 'w' and 'HTTP 400' in str(e) and '<phoneme' in xml:
-                    print('    Azure không nhận pinyin, đọc chữ Hán thường.')
-                    xml = ssml(escape(re.sub(r'[()（）｜\s]', '', v['hz'])), args.voice, args.word_rate)
-                    data = synth(region, key, xml)
+                    print('    Google không nhận pinyin, đọc chữ Hán thường.')
+                    plain_xml = ssml(escape(re.sub(r'[()（）｜\s]', '', v['hz'])))
+                    data = synth(key, plain_xml, args.voice, rate)
                 else:
                     raise
             with open(path, 'wb') as f:
@@ -277,8 +286,8 @@ def main():
             failed += 1
             print(f'    LỖI: {e}')
             if 'HTTP 401' in str(e) or 'HTTP 403' in str(e):
-                sys.exit('Key/region không hợp lệ, dừng lại.')
-        time.sleep(0.15)
+                sys.exit('API key không hợp lệ hoặc chưa bật Cloud Text-to-Speech API, dừng lại.')
+        time.sleep(0.1)
 
     idx = write_index(args.voice)
     print(f'\nXong: tạo {done}, bỏ qua {skipped} (đã có), lỗi {failed}. '

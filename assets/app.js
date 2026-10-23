@@ -15,8 +15,8 @@ const STR = {
     noRepeat: 'No repeats', noRepeatDesc: 'On: go through every card before reshuffling. Off: each Next picks a fully random card (may repeat).',
     range: 'Word range (No.)', front: 'Card front', frontHz: 'Chinese', frontMeaning: 'Meaning', frontAll: 'Everything',
     showPinyin: 'Show pinyin on front', showExample: 'Show example sentence', example: 'Example', listenEx: 'Play the example', autoSpeak: 'Auto-play audio on new card', audioSrc: 'Pronunciation source', audioBrowser: 'Browser voice',
-    audioStatus: (w, x, n) => `Azure audio found: ${w}/${n} words, ${x}/${n} examples. Missing files fall back to the browser voice.`,
-    audioNone: 'No Azure audio yet (run tools/azure_tts.py). Using the browser voice for now.',
+    audioStatus: (w, x, n) => `Google audio found: ${w}/${n} words, ${x}/${n} examples. Missing files fall back to the browser voice.`,
+    audioNone: 'No Google audio yet (run tools/google_tts.py). Using the browser voice for now.',
     theme: 'Theme', themeAuto: 'Auto', themeLight: 'Light', themeDark: 'Dark', apply: 'Apply & restart',
     flipHint: 'Click to flip', flip: 'Flip card', prev: 'Prev', next: 'Next', listen: 'Play pronunciation',
     tapFlip: 'Tap to flip', tapHz: 'Tap to see the Chinese', phrase: 'phrase',
@@ -38,8 +38,8 @@ const STR = {
     noRepeat: 'Không lặp lại', noRepeatDesc: 'Bật: đi hết các thẻ rồi mới xáo lại. Tắt: mỗi lần Next chọn ngẫu nhiên hoàn toàn (có thể trùng).',
     range: 'Phạm vi STT', front: 'Mặt trước', frontHz: 'Tiếng Trung', frontMeaning: 'Nghĩa', frontAll: 'Hiện hết',
     showPinyin: 'Hiện pinyin ở mặt trước', showExample: 'Hiện câu ví dụ', example: 'Ví dụ', listenEx: 'Nghe câu ví dụ', autoSpeak: 'Tự đọc khi lật sang thẻ mới', audioSrc: 'Nguồn phát âm', audioBrowser: 'Giọng trình duyệt',
-    audioStatus: (w, x, n) => `Đã có audio Azure: ${w}/${n} từ, ${x}/${n} câu ví dụ. Thiếu file nào thì dùng giọng trình duyệt.`,
-    audioNone: 'Chưa có audio Azure (chạy tools/azure_tts.py). Tạm thời dùng giọng trình duyệt.',
+    audioStatus: (w, x, n) => `Đã có audio Google: ${w}/${n} từ, ${x}/${n} câu ví dụ. Thiếu file nào thì dùng giọng trình duyệt.`,
+    audioNone: 'Chưa có audio Google (chạy tools/google_tts.py). Tạm thời dùng giọng trình duyệt.',
     theme: 'Giao diện', themeAuto: 'Tự động', themeLight: 'Sáng', themeDark: 'Tối', apply: 'Áp dụng & bắt đầu lại',
     flipHint: 'Bấm để lật thẻ', flip: 'Lật thẻ', prev: 'Trước', next: 'Tiếp', listen: 'Nghe phát âm',
     tapFlip: 'Bấm để lật thẻ', tapHz: 'Bấm để xem chữ Hán', phrase: 'cụm từ',
@@ -54,10 +54,11 @@ const POS_EN = {
   'liên từ': 'conjunction', 'hậu tố': 'suffix', 'tiền tố': 'prefix',
 };
 
-const DEFAULTS = { lang: 'en', order: 'random', noRepeat: true, from: 1, to: VOCAB.length, front: 'hz', deck: 'hsk1', pinyin: false, example: true, autoSpeak: false, audio: 'azure', theme: 'auto' };
+const DEFAULTS = { lang: 'en', order: 'random', noRepeat: true, from: 1, to: VOCAB.length, front: 'hz', deck: 'hsk1', pinyin: false, example: true, autoSpeak: false, audio: 'google', theme: 'auto' };
 const STORE_KEY = 'hsk1-flashcard-settings';
 let cfg = { ...DEFAULTS };
 try { Object.assign(cfg, JSON.parse(localStorage.getItem(STORE_KEY) || '{}')); } catch (e) {}
+if (cfg.audio === 'azure') cfg.audio = 'google';   // cài đặt cũ từ bản dùng Azure
 
 // ----- Bộ thẻ: HSK1 có sẵn + các bộ nhập từ Excel (lưu trong localStorage) -----
 const HSK1_ID = 'hsk1';
@@ -257,7 +258,7 @@ function speakTTS(text) {
   speechSynthesis.speak(u);
 }
 
-// File mp3 tạo bởi tools/azure_tts.py: audio/w/<STT>.mp3 (từ), audio/x/<STT>.mp3 (câu ví dụ).
+// File mp3 tạo bởi tools/google_tts.py: audio/w/<STT>.mp3 (từ), audio/x/<STT>.mp3 (câu ví dụ).
 // audio/index.js khai báo window.HSK_AUDIO = {w: [STT...], x: [STT...]} để biết file nào có sẵn.
 const audioFiles = { w: new Set(), x: new Set() };
 const player = new Audio();
@@ -284,7 +285,7 @@ function speak(kind = 'w') {
   const v = VOCAB[history[pos]];
   if (kind === 'x' && !v.x) return;
   const text = kind === 'x' ? v.x[0] : v.hz.split('｜')[0].replace(/\(.*?\)/g, '').trim();
-  if (cfg.audio === 'azure' && isBuiltin() && audioFiles[kind].has(v.id)) {
+  if (cfg.audio === 'google' && isBuiltin() && audioFiles[kind].has(v.id)) {
     if ('speechSynthesis' in window) speechSynthesis.cancel();
     player.pause();
     player.src = `audio/${kind}/${v.id}.mp3`;
