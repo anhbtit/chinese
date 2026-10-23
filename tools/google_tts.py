@@ -13,7 +13,8 @@ Cách dùng:
   python3 tools/google_tts.py --dry-run           # kiểm tra tách pinyin, không gọi Google
   python3 tools/google_tts.py                     # tạo các file còn thiếu
   python3 tools/google_tts.py --only 67,76 --force  # tạo lại vài từ
-  python3 tools/google_tts.py --voice cmn-CN-Neural2-B   # đổi giọng
+  python3 tools/google_tts.py --list-voices       # xem giọng có thật
+  python3 tools/google_tts.py --voice <tên giọng>  # đổi giọng
 Kết quả: audio/w/<STT>.mp3 (từ), audio/x/<STT>.mp3 (câu ví dụ), audio/index.js (danh sách cho trang).
 """
 import argparse
@@ -229,8 +230,18 @@ def main():
     ap.add_argument('--only', help='chỉ tạo các STT này, vd: 1,5,67')
     ap.add_argument('--force', action='store_true', help='tạo lại cả file đã có')
     ap.add_argument('--no-examples', action='store_true', help='bỏ qua câu ví dụ')
+    ap.add_argument('--list-voices', action='store_true', help='in danh sách giọng cmn-CN của Google rồi thoát')
     ap.add_argument('--dry-run', action='store_true', help='chỉ in SSML/kiểm tra pinyin, không gọi Google')
     args = ap.parse_args()
+
+    if args.list_voices:
+        key = os.environ.get('GOOGLE_TTS_API_KEY') or sys.exit('Thiếu biến môi trường GOOGLE_TTS_API_KEY.')
+        req = urllib.request.Request(API.replace('text:synthesize', 'voices?languageCode=cmn-CN'),
+                                     headers={'X-Goog-Api-Key': key})
+        with urllib.request.urlopen(req, timeout=30) as r:
+            for v in sorted(json.load(r).get('voices', []), key=lambda v: v['name']):
+                print(f"{v['name']:<28} {v['ssmlGender']}")
+        return
 
     vocab = load_vocab()
     if args.only:
@@ -273,6 +284,8 @@ def main():
             try:
                 data = synth(key, xml, args.voice, rate)
             except RuntimeError as e:
+                if 'does not exist' in str(e) or 'voice' in str(e).lower() and 'HTTP 400' in str(e):
+                    sys.exit(f'Giọng "{args.voice}" không hợp lệ: chạy --list-voices để xem tên đúng.\n{e}')
                 if kind == 'w' and 'HTTP 400' in str(e) and '<phoneme' in xml:
                     print('    Google không nhận pinyin, đọc chữ Hán thường.')
                     plain_xml = ssml(escape(re.sub(r'[()（）｜\s]', '', v['hz'])))
