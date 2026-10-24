@@ -1,5 +1,5 @@
 .DS_Store
-# Tài liệu gốc của người khác - không đưa lên GitHub
+# Third-party source documents - keep out of GitHub
 reference/
 __pycache__/
 .env

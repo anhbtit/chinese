@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pinyin</title>
+<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/pinyin.css">
+</head>
+<body>
+<div class="pt-wrap">
+  <header class="pt-top">
+    <a class="icon-btn" href="index.html" data-i18n="back"></a>
+    <div class="pt-tools">
+      <div class="seg" id="segLang">
+        <button data-v="en">EN</button>
+        <button data-v="vi">VI</button>
+      </div>
+      <button class="icon-btn" id="btnTheme" data-i18n-title="theme">◐</button>
+    </div>
+  </header>
+
+  <h1 class="pt-title" data-i18n="title"></h1>
+  <p class="pt-sub" data-i18n="subtitle"></p>
+
+  <div class="pt-scroll" id="tableWrap">
+    <table class="pt-table hz-font" id="table"></table>
+  </div>
+
+  <p class="pt-credit" data-i18n-html="credit"></p>
+</div>
+
+<div class="pt-dialog" id="dialog" hidden>
+  <div class="pt-card" role="dialog" aria-modal="true" aria-labelledby="dSyl">
+    <button class="pt-close" id="btnClose" data-i18n-title="close">✕</button>
+    <div class="pt-syl" id="dSyl"></div>
+    <div class="pt-parts" id="dParts"></div>
+    <div class="pt-tones" id="dTones"></div>
+    <button class="icon-btn pt-all" id="btnAll" data-i18n="playAll"></button>
+    <div class="pt-note" id="dNote"></div>
+  </div>
+</div>
+
+<script src="assets/pinyin-data.js"></script>
+<script src="assets/pinyin.js"></script>
+</body>
+</html>

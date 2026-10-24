@@ -1,0 +1,64 @@
+/* Pinyin syllable table page – shares color variables / theme with style.css */
+.pt-wrap { width: 100%; max-width: 1400px; display: flex; flex-direction: column; gap: 12px; }
+.pt-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.pt-top a.icon-btn { text-decoration: none; }
+.pt-tools { display: flex; gap: 8px; align-items: center; }
+
+.pt-title {
+  margin: 8px 0 0; text-align: center; font-size: clamp(26px, 5vw, 44px); font-weight: 750; letter-spacing: -.5px;
+  background: linear-gradient(90deg, var(--accent), #d98b3a); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.pt-sub { margin: 0 0 6px; text-align: center; color: var(--muted); font-size: 14px; }
+
+.pt-scroll {
+  overflow: auto; max-height: calc(100vh - 210px); border: 1px solid var(--line); border-radius: 14px;
+  background: var(--surface-2); box-shadow: var(--shadow);
+}
+.pt-table { border-collapse: separate; border-spacing: 0; font-size: 14px; }
+.pt-table th, .pt-table td { padding: 0; text-align: center; white-space: nowrap; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.pt-table thead th {
+  position: sticky; top: 0; z-index: 2; background: var(--accent); color: #fff; font-weight: 650;
+  padding: 9px 10px; min-width: 52px;
+}
+.pt-table tbody th {
+  position: sticky; left: 0; z-index: 1; background: var(--surface); color: var(--text); font-weight: 650; padding: 0 12px;
+}
+.pt-table thead th:first-child { left: 0; z-index: 3; }
+.pt-table td button {
+  display: block; width: 100%; min-width: 52px; height: 34px; padding: 0 8px; border: none; cursor: pointer;
+  background: var(--surface); color: var(--text); font: inherit;
+}
+.pt-table td button:hover, .pt-table td button:focus-visible { background: var(--accent-soft); color: var(--accent); outline: none; }
+.pt-table td button.muted { color: var(--muted); font-style: italic; }
+.pt-table td button.playing { background: var(--accent); color: #fff; }
+.pt-table tr.hl th, .pt-table th.hl { color: var(--accent); }
+.pt-table thead th.hl { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
+
+.pt-credit { font-size: 12px; color: var(--muted); text-align: center; margin: 4px 0 0; line-height: 1.6; }
+.pt-credit a { color: inherit; }
+
+/* syllable detail dialog */
+.pt-dialog { position: fixed; inset: 0; background: rgba(0, 0, 0, .35); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
+.pt-dialog[hidden] { display: none; }
+.pt-card {
+  position: relative; width: 100%; max-width: 380px; background: var(--surface); border: 1px solid var(--line);
+  border-radius: 20px; box-shadow: var(--shadow); padding: 26px 22px 20px; text-align: center;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.pt-close { position: absolute; top: 10px; right: 12px; border: none; background: transparent; color: var(--muted); font-size: 18px; cursor: pointer; padding: 6px; border-radius: 8px; }
+.pt-close:hover { color: var(--accent); background: var(--surface-2); }
+.pt-syl { font-size: 54px; font-weight: 600; color: var(--accent); line-height: 1.1; }
+.pt-parts { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+.pt-parts span { background: var(--chip); border-radius: 999px; padding: 3px 10px; }
+.pt-tones { display: grid; grid-template-columns: repeat(auto-fit, minmax(62px, 1fr)); gap: 8px; }
+.pt-tones button {
+  border: 1px solid var(--line); background: var(--surface-2); color: var(--text); border-radius: 12px; cursor: pointer;
+  padding: 10px 4px 8px; font: inherit; font-size: 22px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+}
+.pt-tones button small { font-size: 11px; color: var(--muted); }
+.pt-tones button:hover { border-color: var(--accent); }
+.pt-tones button.playing { background: var(--accent); border-color: var(--accent); color: #fff; }
+.pt-tones button.playing small { color: #fff; }
+.pt-all { align-self: center; }
+.pt-note { font-size: 12px; color: var(--muted); }
+.pt-note:empty { display: none; }

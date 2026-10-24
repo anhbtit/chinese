@@ -10,6 +10,7 @@ const STR = {
     importFull: 'Browser storage is full – deck was not saved.',
     confirmDel: name => `Delete deck “${name}”?`,
     audioCustom: 'Imported deck: using the browser voice for pronunciation.',
+    pinyin: 'Pinyin', pinyinTitle: 'Pinyin syllable table with audio',
     shuffle: 'Shuffle', shuffleTitle: 'Reshuffle the deck', settings: 'Settings',
     order: 'Next order', random: 'Random', seq: 'By number',
     noRepeat: 'No repeats', noRepeatDesc: 'On: go through every card before reshuffling. Off: each Next picks a fully random card (may repeat).',
@@ -34,6 +35,7 @@ const STR = {
     importFull: 'Bộ nhớ trình duyệt đã đầy – chưa lưu được bộ thẻ.',
     confirmDel: name => `Xoá bộ thẻ “${name}”?`,
     audioCustom: 'Bộ thẻ nhập từ Excel: dùng giọng trình duyệt để phát âm.',
+    pinyin: 'Pinyin', pinyinTitle: 'Bảng âm tiết pinyin có phát âm',
     shuffle: 'Xáo', shuffleTitle: 'Xáo lại bộ thẻ', settings: 'Cài đặt',
     order: 'Thứ tự khi Next', random: 'Ngẫu nhiên', seq: 'Theo STT',
     noRepeat: 'Không lặp lại', noRepeatDesc: 'Bật: đi hết các thẻ rồi mới xáo lại. Tắt: mỗi lần Next chọn ngẫu nhiên hoàn toàn (có thể trùng).',
@@ -60,9 +62,9 @@ const DEFAULTS = { lang: 'en', order: 'random', noRepeat: true, from: 1, to: VOC
 const STORE_KEY = 'hsk1-flashcard-settings';
 let cfg = { ...DEFAULTS };
 try { Object.assign(cfg, JSON.parse(localStorage.getItem(STORE_KEY) || '{}')); } catch (e) {}
-if (cfg.audio === 'azure') cfg.audio = 'google';   // cài đặt cũ từ bản dùng Azure
+if (cfg.audio === 'azure') cfg.audio = 'google';   // old setting from the Azure version
 
-// ----- Bộ thẻ: HSK1 có sẵn + các bộ nhập từ Excel (lưu trong localStorage) -----
+// ----- Decks: built-in HSK1 + decks imported from Excel (stored in localStorage) -----
 const HSK1_ID = 'hsk1';
 const DECKS_KEY = 'flashcard-custom-decks';
 let customDecks = {};
@@ -72,9 +74,9 @@ if (cfg.deck !== HSK1_ID && customDecks[cfg.deck]) VOCAB = customDecks[cfg.deck]
 else { if (cfg.deck !== HSK1_ID) { cfg.from = 1; cfg.to = HSK1_VOCAB.length; } cfg.deck = HSK1_ID; }
 const isBuiltin = () => cfg.deck === HSK1_ID;
 
-// Lịch sử các thẻ đã xem: next thêm vào cuối, prev lùi lại; next sau khi lùi sẽ đi tới lại theo lịch sử.
-let pool = [];      // index trong VOCAB thuộc phạm vi
-let queue = [];     // hàng đợi xáo (chế độ không lặp)
+// History of viewed cards: next appends, prev steps back; next after stepping back replays the history.
+let pool = [];      // VOCAB indexes within the range
+let queue = [];     // shuffled queue (no-repeat mode)
 let history = [];
 let pos = -1;
 let seen = new Set();
@@ -84,7 +86,7 @@ const esc = s => s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&
 
 function save() { try { localStorage.setItem(STORE_KEY, JSON.stringify(cfg)); } catch (e) {} }
 
-// Tiến độ học lưu theo STT (không theo index) để vẫn khớp nếu dữ liệu thay đổi thứ tự.
+// Progress is stored by card number (not index) so it still matches if the data order changes.
 const progressKey = id => id === HSK1_ID ? 'hsk1-flashcard-progress' : 'flashcard-progress-' + id;
 const HISTORY_MAX = 2000;
 const deckSig = () => [cfg.order, cfg.noRepeat, cfg.from, cfg.to].join('|');
@@ -145,7 +147,7 @@ function pickNext() {
   if (cfg.noRepeat) {
     if (!queue.length) {
       queue = shuffle(pool.slice());
-      // tránh lặp ngay thẻ vừa xem khi xáo vòng mới
+      // avoid repeating the card just seen when a new round is shuffled
       if (queue.length > 1 && queue[queue.length - 1] === cur) [queue[0], queue[queue.length - 1]] = [queue[queue.length - 1], queue[0]];
     }
     return queue.pop();
@@ -169,7 +171,7 @@ function prev() {
 
 const T = () => STR[cfg.lang] || STR.en;
 
-// Từ loại + nghĩa theo ngôn ngữ đang chọn: [[pos, meaning], ...]
+// Part of speech + meaning in the current language: [[pos, meaning], ...]
 function senses(v) {
   if (cfg.lang === 'vi') return v.s;
   return v.s.map(([p], i) => [POS_EN[p] || p, v.e[i]]);
@@ -182,7 +184,7 @@ function sensesHTML(v) {
   }).join('');
 }
 
-// Tô đậm từ đang học trong câu ví dụ (chọn biến thể dài nhất có mặt trong câu)
+// Highlight the current word in the example sentence (longest variant found in the sentence)
 function markWord(sentence, hz) {
   const cands = hz.split('｜').flatMap(x => [x.replace(/\(.*?\)/g, ''), (x.match(/\((.*?)\)/) || [])[1]])
     .map(x => (x || '').trim()).filter(Boolean).sort((a, b) => b.length - a.length);
@@ -252,7 +254,7 @@ function loadVoice() {
   const zh = vs.filter(v => /^zh/i.test(v.lang));
   const pick = a => a.find(v => /zh[-_]CN/i.test(v.lang)) || a[0] || null;
   zhVoice = pick(zh);
-  // chọn giọng trình duyệt theo giới tính nếu đoán được qua tên; không thì dùng chung 1 giọng và đổi cao độ
+  // pick browser voices by gender when the name gives it away; otherwise share one voice and shift pitch
   const isMale = v => /(^|[^a-z])male([^a-z]|$)|yunxi|yunjian|yunyang|kangkang|liwei|li-mu|zhiwei/i.test(v.name) && !/female/i.test(v.name);
   const isFemale = v => /female|xiaoxiao|xiaoyi|tingting|huihui|yaoyao|meijia|lili|ting-ting/i.test(v.name);
   zhVoices = { m: pick(zh.filter(isMale)), f: pick(zh.filter(isFemale)) };
@@ -267,14 +269,14 @@ function speakTTS(text, g) {
   if (own) u.voice = own;
   else {
     if (zhVoice) u.voice = zhVoice;
-    if (g) u.pitch = g === 'm' ? .6 : 1.25;   // không có giọng riêng: phân biệt nam/nữ bằng cao độ
+    if (g) u.pitch = g === 'm' ? .6 : 1.25;   // no gendered voice: tell male/female apart by pitch
   }
   speechSynthesis.speak(u);
 }
 
-// File mp3 tạo bởi tools/google_tts.py: audio/<m|f>/w/<STT>.mp3 (từ), audio/<m|f>/x/<STT>.mp3 (câu ví dụ).
-// audio/index.js khai báo window.HSK_AUDIO = {m: {w: [STT...], x: [STT...]}, f: {...}} để biết file nào có sẵn.
-// Mỗi lần bấm đọc luân phiên giọng nam (m) / nữ (f); file ở audio/<m|f>/<w|x>/<STT>.mp3.
+// mp3 files generated by tools/google_tts.py: audio/<m|f>/w/<No>.mp3 (word), audio/<m|f>/x/<No>.mp3 (example).
+// audio/index.js declares window.HSK_AUDIO = {m: {w: [No...], x: [No...]}, f: {...}} listing the available files.
+// Each press alternates the male (m) / female (f) voice.
 const audioFiles = { m: { w: new Set(), x: new Set() }, f: { w: new Set(), x: new Set() } };
 let nextGender = 'm';
 const player = new Audio();
@@ -297,21 +299,21 @@ function updateAudioStatus() {
   $('audioStatus').textContent = any ? t.audioStatus(c, VOCAB.length) : t.audioNone;
 }
 
-// kind: 'w' = đọc từ, 'x' = đọc câu ví dụ
+// kind: 'w' = word, 'x' = example sentence
 function speak(kind = 'w') {
   if (pos < 0) return;
   const v = VOCAB[history[pos]];
   if (kind === 'x' && !v.x) return;
   const text = kind === 'x' ? v.x[0] : v.hz.split('｜')[0].replace(/\(.*?\)/g, '').trim();
-  const g = nextGender;                        // luân phiên: lần 1 nam, lần 2 nữ, lần 3 nam…
+  const g = nextGender;                        // alternate: 1st male, 2nd female, 3rd male…
   nextGender = g === 'm' ? 'f' : 'm';
-  // thiếu file của giọng này thì dùng file của giọng kia (nếu có) trước khi dùng giọng trình duyệt
+  // if this voice's file is missing, use the other voice's file before falling back to the browser voice
   const src = [g, g === 'm' ? 'f' : 'm'].find(x => audioFiles[x][kind].has(v.id));
   if (cfg.audio === 'google' && isBuiltin() && src) {
     if ('speechSynthesis' in window) speechSynthesis.cancel();
     player.pause();
     player.src = `audio/${src}/${kind}/${v.id}.mp3`;
-    player.defaultPlaybackRate = player.playbackRate = cfg.speed;   // đặt defaultPlaybackRate vì đổi src sẽ reset playbackRate
+    player.defaultPlaybackRate = player.playbackRate = cfg.speed;   // set defaultPlaybackRate too, since changing src resets playbackRate
     player.play().catch(err => { if (err.name !== 'AbortError') speakTTS(text, g); });
     return;
   }
@@ -382,7 +384,7 @@ $('btnApply').addEventListener('click', () => {
   save(); restart(); fillSettings();
   setPanel(false);
 });
-// Mở/đóng cài đặt; khi đang mở thì ẩn khu vực học (tiến độ, thẻ, nút điều hướng)
+// Open/close settings; while open, hide the study area (progress, card, navigation)
 function setPanel(open) {
   $('panel').classList.toggle('open', open);
   $('study').hidden = open;
@@ -422,7 +424,7 @@ $('scene').addEventListener('touchend', e => {
   }
 });
 
-// ----- Nhập flashcard từ Excel (.xlsx) – tự đọc file, không cần thư viện ngoài, chạy offline -----
+// ----- Excel (.xlsx) flashcard import – parsed in-browser, no external library, works offline -----
 async function unzip(buf) {
   const dv = new DataView(buf), u8 = new Uint8Array(buf), dec = new TextDecoder();
   let eocd = -1;
@@ -454,7 +456,7 @@ async function unzip(buf) {
 const xmlDoc = txt => new DOMParser().parseFromString(txt, 'application/xml');
 const xmlAll = (node, tag) => Array.from(node.getElementsByTagNameNS('*', tag));
 
-// Trả về các dòng của sheet đầu tiên: mảng các mảng chuỗi
+// Return the rows of the first sheet as an array of string arrays
 async function readXlsxRows(file) {
   const read = await unzip(await file.arrayBuffer());
   const wb = await read('xl/workbook.xml');
@@ -470,7 +472,7 @@ async function readXlsxRows(file) {
   const sheetXml = await read(path);
   if (!sheetXml) throw new Error('sheet not found');
 
-  // chuỗi dùng chung (bỏ qua phần chú âm <rPh>)
+  // shared strings (skip phonetic <rPh> runs)
   const textOf = si => xmlAll(si, 't').filter(t => !t.parentNode.localName.startsWith('rPh')).map(t => t.textContent).join('');
   const sstXml = await read('xl/sharedStrings.xml');
   const shared = sstXml ? xmlAll(xmlDoc(sstXml), 'si').map(textOf) : [];
@@ -490,7 +492,7 @@ async function readXlsxRows(file) {
   });
 }
 
-// Quy từ loại (Anh / viết tắt) về tên tiếng Việt dùng sẵn trong bộ HSK1; không nhận ra thì giữ nguyên.
+// Map parts of speech (English / abbreviations) to the Vietnamese names used by the HSK1 deck; keep unknown ones as is.
 const POS_CANON = (() => {
   const m = {};
   Object.entries(POS_EN).forEach(([vi, en]) => { m[en] = vi; m[vi] = vi; });
@@ -503,11 +505,11 @@ const POS_CANON = (() => {
 })();
 const canonPos = p => POS_CANON[p.toLowerCase().replace(/\.$/, '').trim()] || p;
 
-// Cột: 1 Chinese · 2 Pinyin · 3 Part of Speech · 4 Meaning. Các dòng trùng chữ + pinyin được gộp thành 1 thẻ nhiều nghĩa.
+// Columns: 1 Chinese · 2 Pinyin · 3 Part of Speech · 4 Meaning. Rows with the same characters + pinyin merge into one multi-sense card.
 function rowsToVocab(rows) {
   const cell = (r, i) => String(r[i] ?? '').replace(/\s*[\r\n]+\s*/g, ' / ').trim();
   const hasHan = s => /[\u3400-\u9fff\uf900-\ufaff]/.test(s);
-  const start = rows.length && !hasHan(cell(rows[0], 0)) ? 1 : 0;   // bỏ dòng tiêu đề
+  const start = rows.length && !hasHan(cell(rows[0], 0)) ? 1 : 0;   // skip the header row
   const vocab = [], byKey = new Map();
   rows.slice(start).forEach(r => {
     const hz = cell(r, 0), py = cell(r, 1), pos = canonPos(cell(r, 2)), mean = cell(r, 3);
@@ -534,7 +536,7 @@ async function importFile(file) {
     const vocab = rowsToVocab(await readXlsxRows(file));
     if (!vocab.length) return showImportMsg(t.importEmpty, 'err');
     const name = file.name.replace(/\.[^.]+$/, '');
-    // nhập lại file cùng tên = thay bộ thẻ cũ (và xoá tiến độ cũ vì STT có thể đã đổi)
+    // re-importing a file with the same name replaces the deck (and clears progress, since numbers may change)
     let id = Object.keys(customDecks).find(k => customDecks[k].name === name);
     const old = id && customDecks[id];
     if (!id) id = 'c' + Date.now().toString(36);
@@ -580,7 +582,7 @@ $('selDeck').addEventListener('change', e => {
 $('btnImport').addEventListener('click', () => $('fileXlsx').click());
 $('fileXlsx').addEventListener('change', e => {
   const f = e.target.files[0];
-  e.target.value = '';   // cho phép chọn lại cùng file
+  e.target.value = '';   // allow picking the same file again
   if (f) importFile(f);
 });
 $('btnDelDeck').addEventListener('click', () => {

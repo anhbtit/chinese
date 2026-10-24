@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
-"""Tạo file mp3 phát âm cho flashcard HSK1 bằng Google Cloud Text-to-Speech.
+"""Generate pronunciation mp3 files for the HSK1 flashcards with Google Cloud Text-to-Speech.
 
-- Từ vựng: đọc theo đúng pinyin trên thẻ (SSML <phoneme alphabet="pinyin">), nên chữ đa âm
-  như 地 de/dì, 还 hái/huán, thanh nhẹ 吧/呢/了… đọc đúng như thẻ. Từ nào không ép được pinyin
-  (hoặc Google từ chối) thì đọc chữ Hán thường.
-- Câu ví dụ: đọc nguyên câu (ngữ cảnh đủ để TTS chọn đúng âm).
+- Words: read with the exact pinyin on the card (SSML <phoneme alphabet="pinyin">), so polyphonic
+  characters such as 地 de/dì, 还 hái/huán and neutral tones 吧/呢/了… match the card. Words whose
+  pinyin cannot be forced (or that Google rejects) are read as plain Chinese text.
+- Example sentences: read as whole sentences (enough context for TTS to pick the right reading).
 
-Cần biến môi trường GOOGLE_TTS_API_KEY (API key của project đã bật "Cloud Text-to-Speech API").
-Giọng WaveNet/Neural2 miễn phí 1 triệu ký tự/tháng; bộ HSK1 chỉ dùng vài chục nghìn ký tự.
+Requires the GOOGLE_TTS_API_KEY environment variable (an API key for a project with the
+"Cloud Text-to-Speech API" enabled).
 
-Cách dùng:
-  python3 tools/google_tts.py --dry-run           # kiểm tra tách pinyin, không gọi Google
-  python3 tools/google_tts.py                     # tạo các file còn thiếu
-  python3 tools/google_tts.py --only 67,76 --force  # tạo lại vài từ
-  python3 tools/google_tts.py --list-voices       # xem giọng có thật
-  python3 tools/google_tts.py --voice-male <tên> --voice-female <tên>   # đổi giọng
-  python3 tools/google_tts.py --gender m          # chỉ tạo giọng nam
-Tạo cả giọng nam và nữ; trang sẽ đọc luân phiên nam / nữ mỗi lần bấm loa.
-Kết quả: audio/{m,f}/w/<STT>.mp3 (từ), audio/{m,f}/x/<STT>.mp3 (câu ví dụ), audio/index.js (danh sách cho trang).
+Usage:
+  python3 tools/google_tts.py --dry-run           # check pinyin splitting, no Google calls
+  python3 tools/google_tts.py                     # generate missing files
+  python3 tools/google_tts.py --only 67,76 --force  # regenerate a few words
+  python3 tools/google_tts.py --list-voices       # list the voices that exist
+  python3 tools/google_tts.py --voice-male <name> --voice-female <name>   # change voices
+  python3 tools/google_tts.py --gender m          # male voice only
+Both a male and a female voice are generated; the page alternates male / female on each press.
+Output: audio/{m,f}/w/<No>.mp3 (words), audio/{m,f}/x/<No>.mp3 (examples), audio/index.js (file list for the page).
 """
 import argparse
 import base64
@@ -36,7 +36,7 @@ PAGE = os.path.join(ROOT, 'assets', 'hsk1-data.js')
 OUT = os.path.join(ROOT, 'audio')
 API = 'https://texttospeech.googleapis.com/v1/text:synthesize'
 
-# ---------- pinyin -> pinyin có số thanh ----------
+# ---------- pinyin -> numbered-tone pinyin ----------
 TONED = {}
 for base, marks in {'a': 'āáǎà', 'e': 'ēéěè', 'i': 'īíǐì', 'o': 'ōóǒò', 'u': 'ūúǔù', 'ü': 'ǖǘǚǜ'}.items():
     for t, ch in enumerate(marks, 1):
@@ -53,7 +53,7 @@ MAXLEN = max(map(len, SYLLABLES))
 
 
 def split_chunk(chunk):
-    """'diànyǐngyuàn' -> [('dian',4),('ying',3),('yuan',4)]; chỉ cho phép nhi hoá (…r) ở cuối."""
+    """'diànyǐngyuàn' -> [('dian',4),('ying',3),('yuan',4)]; erhua (…r) is only allowed at the end."""
     base, tones = '', []
     for ch in chunk:
         if ch in TONED:
@@ -83,12 +83,12 @@ def split_chunk(chunk):
 
 
 def to_pinyin_ph(hz, py):
-    """Trả về chuỗi ph kiểu 'ni3 hao3' cho SSML <phoneme alphabet="pinyin">, hoặc None nếu không chắc chắn
-    (khi đó đọc chữ Hán bình thường). Từ có nhi hoá (…r) cũng trả None vì chưa rõ cú pháp."""
+    """Return a ph string like 'ni3 hao3' for SSML <phoneme alphabet="pinyin">, or None when unsure
+    (the characters are then read normally). Erhua words (…r) also return None since the syntax is unclear."""
     n_hz = len(re.findall(r'[一-鿿〇]', hz))
     p = unicodedata.normalize('NFC', py.lower())
     p = re.sub(r"//|-|'|’", ' ', p)
-    p = p.replace('·', ' ·')  # '·' trước âm tiết = thường đọc thanh nhẹ (出来 chū//·lái -> chūlai)
+    p = p.replace('·', ' ·')  # '·' before a syllable usually means neutral tone (出来 chū//·lái -> chūlai)
     p = re.sub(r'[^a-zāáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜü· ]', ' ', p)
     chunks = [c for c in p.split() if c.strip('·')]
     if not chunks:
@@ -105,7 +105,7 @@ def to_pinyin_ph(hz, py):
     def count(seg):
         return sum(2 if er else 1 for _, _, er in seg)
 
-    # chọn cách tách mỗi đoạn sao cho tổng số âm tiết khớp số chữ Hán
+    # pick a split for each chunk so the total syllable count matches the number of characters
     best = None
 
     def combine(k, acc, total):
@@ -132,21 +132,21 @@ def to_pinyin_ph(hz, py):
 
 
 def word_parts(hz, py):
-    """Tách biến thể: '爸爸 ｜ 爸' / 'bàba ｜ bà' -> [('爸爸','bàba'), ('爸','bà')]; '第(第二)' -> 第, 第二."""
+    """Split variants: '爸爸 ｜ 爸' / 'bàba ｜ bà' -> [('爸爸','bàba'), ('爸','bà')]; '第(第二)' -> 第, 第二."""
     hzs = [x.strip() for x in hz.split('｜')]
     pys = [x.strip() for x in py.split('｜')]
     if len(hzs) != len(pys):
         return [(re.sub(r'[()（）｜\s]', '', hz), None)]
     parts = []
     for h, p in zip(hzs, pys):
-        alts = re.split(r'(?<!/)/(?!/)', p)  # '/' đơn = hai cách đọc; '//' là dấu từ ly hợp
-        if len(alts) > 1:  # 谁 shéi/shuí -> đọc cả hai cách
+        alts = re.split(r'(?<!/)/(?!/)', p)  # single '/' = two readings; '//' marks a separable verb
+        if len(alts) > 1:  # 谁 shéi/shuí -> read both
             parts += [(h, alt) for alt in alts]
             continue
         m, mp = re.fullmatch(r'(.+?)\((.+)\)', h), re.fullmatch(r'(.+?)\s+\((.+)\)', p)
         if m and mp:  # 们(朋友们) / men (péngyoumen)
             parts += [(m.group(1), mp.group(1)), (m.group(2), mp.group(2))]
-        else:          # 有(一)些 / yǒu(yì)xiē -> đọc liền
+        else:          # 有(一)些 / yǒu(yì)xiē -> read as one
             parts.append((re.sub(r'[()（）]', '', h), re.sub(r'[()（）]', ' ', p)))
     return parts
 
@@ -169,7 +169,7 @@ def ssml(body):
 
 # ---------- Google Cloud TTS ----------
 def synth(key, xml, voice, rate, retries=6):
-    if 'Chirp' in voice:   # Chirp3-HD không nhận SSML: gửi văn bản thuần (mất việc ép pinyin)
+    if 'Chirp' in voice:   # Chirp3-HD does not accept SSML: send plain text (pinyin can no longer be forced)
         text = re.sub(r'<[^>]+>', '', xml.replace('<break time="400ms"/>', '， '))
         inp = {'text': unescape(text)}
     else:
