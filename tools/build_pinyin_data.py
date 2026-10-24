@@ -82,7 +82,7 @@ def main():
             continue
         k = m.group(1).replace('ü', 'v')
         sources[k].add(d)
-        if d == PLAY_DIR:
+        if d == PLAY_DIR and m.group(2) != '5':   # the *5.mp3 files there are not Mandarin recordings
             tones[k].add(int(m.group(2)))
 
     rows = []

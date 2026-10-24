@@ -34,9 +34,6 @@
 .pt-table tr.hl th, .pt-table th.hl { color: var(--accent); }
 .pt-table thead th.hl { color: #fff; text-decoration: underline; text-underline-offset: 3px; }
 
-.pt-credit { font-size: 12px; color: var(--muted); text-align: center; margin: 4px 0 0; line-height: 1.6; }
-.pt-credit a { color: inherit; }
-
 /* syllable detail dialog */
 .pt-dialog { position: fixed; inset: 0; background: rgba(0, 0, 0, .35); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 10; }
 .pt-dialog[hidden] { display: none; }

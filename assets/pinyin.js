@@ -9,7 +9,6 @@ const STR = {
     tone: ['1st tone', '2nd tone', '3rd tone', '4th tone', 'neutral'],
     noAudio: 'No freely licensed recording for this syllable.',
     audioErr: 'Could not load the audio (check your connection).',
-    credit: 'Audio: recordings by Chen Wang from <a href="https://github.com/hugolpz/audio-cmn" target="_blank" rel="noopener">hugolpz/audio-cmn</a> (CC BY-SA), served from <a href="https://github.com/zispace/hanyu-pinyin-audio" target="_blank" rel="noopener">zispace/hanyu-pinyin-audio</a> via jsDelivr.',
   },
   vi: {
     back: '← Flashcard', theme: 'Đổi sáng / tối', title: 'Bảng âm tiết Pinyin',
@@ -18,7 +17,6 @@ const STR = {
     tone: ['Thanh 1', 'Thanh 2', 'Thanh 3', 'Thanh 4', 'Thanh nhẹ'],
     noAudio: 'Chưa có bản ghi âm giấy phép mở cho âm tiết này.',
     audioErr: 'Không tải được audio (kiểm tra kết nối mạng).',
-    credit: 'Âm thanh: bản ghi của Chen Wang trong <a href="https://github.com/hugolpz/audio-cmn" target="_blank" rel="noopener">hugolpz/audio-cmn</a> (CC BY-SA), tải từ <a href="https://github.com/zispace/hanyu-pinyin-audio" target="_blank" rel="noopener">zispace/hanyu-pinyin-audio</a> qua jsDelivr.',
   },
 };
 
