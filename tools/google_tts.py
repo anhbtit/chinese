@@ -189,12 +189,12 @@ def synth(key, xml, voice, rate, retries=6):
             with urllib.request.urlopen(req, timeout=30) as r:
                 audio = json.load(r).get('audioContent')
                 if not audio:
-                    raise RuntimeError('Google trả về file rỗng')
+                    raise RuntimeError('Google returned an empty file')
                 return base64.b64decode(audio)
         except urllib.error.HTTPError as e:
             if e.code in (429, 500, 502, 503, 504) and attempt < retries - 1:
                 wait = int(e.headers.get('Retry-After') or delay)
-                print(f'    Google {e.code}, chờ {wait}s rồi thử lại…')
+                print(f'    Google {e.code}, retrying in {wait}s…')
                 time.sleep(wait)
                 delay = min(delay * 2, 60)
                 continue
@@ -205,18 +205,18 @@ def synth(key, xml, voice, rate, retries=6):
                 time.sleep(delay)
                 delay = min(delay * 2, 60)
                 continue
-            raise RuntimeError(f'Lỗi mạng: {e.reason}') from None
+            raise RuntimeError(f'Network error: {e.reason}') from None
 
 
 def load_vocab():
     js = open(PAGE, encoding='utf-8').read()
     m = re.search(r'^const HSK1_VOCAB = (.*);$', js, re.M)
     if not m:
-        sys.exit(f'Không tìm thấy dữ liệu HSK1_VOCAB trong {PAGE}')
+        sys.exit(f'HSK1_VOCAB data not found in {PAGE}')
     return json.loads(m.group(1))
 
 
-GENDERS = {'f': 'nữ', 'm': 'nam'}
+GENDERS = {'f': 'female', 'm': 'male'}
 
 
 def write_index(voices):
@@ -234,22 +234,22 @@ def write_index(voices):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument('--voice-female', default='cmn-CN-Wavenet-A', help='giọng nữ (mặc định: cmn-CN-Wavenet-A)')
-    ap.add_argument('--voice-male', default='cmn-CN-Wavenet-B', help='giọng nam (mặc định: cmn-CN-Wavenet-B)')
-    ap.add_argument('--gender', choices=['both', 'f', 'm'], default='both', help='tạo giọng nào (mặc định: both)')
-    ap.add_argument('--word-rate', type=float, default=0.85, help='tốc độ đọc từ, 1.0 = bình thường (mặc định 0.85)')
-    ap.add_argument('--example-rate', type=float, default=0.95, help='tốc độ đọc câu ví dụ (mặc định 0.95)')
-    ap.add_argument('--only', help='chỉ tạo các STT này, vd: 1,5,67')
-    ap.add_argument('--force', action='store_true', help='tạo lại cả file đã có')
-    ap.add_argument('--no-examples', action='store_true', help='bỏ qua câu ví dụ')
-    ap.add_argument('--list-voices', action='store_true', help='in danh sách giọng cmn-CN của Google rồi thoát')
-    ap.add_argument('--dry-run', action='store_true', help='chỉ in SSML/kiểm tra pinyin, không gọi Google')
+    ap.add_argument('--voice-female', default='cmn-CN-Wavenet-A', help='female voice (default: cmn-CN-Wavenet-A)')
+    ap.add_argument('--voice-male', default='cmn-CN-Wavenet-B', help='male voice (default: cmn-CN-Wavenet-B)')
+    ap.add_argument('--gender', choices=['both', 'f', 'm'], default='both', help='which voices to generate (default: both)')
+    ap.add_argument('--word-rate', type=float, default=0.85, help='speaking rate for words, 1.0 = normal (default 0.85)')
+    ap.add_argument('--example-rate', type=float, default=0.95, help='speaking rate for example sentences (default 0.95)')
+    ap.add_argument('--only', help='only these card numbers, e.g. 1,5,67')
+    ap.add_argument('--force', action='store_true', help='regenerate existing files too')
+    ap.add_argument('--no-examples', action='store_true', help='skip example sentences')
+    ap.add_argument('--list-voices', action='store_true', help="print Google's cmn-CN voices and exit")
+    ap.add_argument('--dry-run', action='store_true', help='only print SSML / check pinyin, no Google calls')
     args = ap.parse_args()
     voices = {'f': args.voice_female, 'm': args.voice_male}
     genders = list(GENDERS) if args.gender == 'both' else [args.gender]
 
     if args.list_voices:
-        key = os.environ.get('GOOGLE_TTS_API_KEY') or sys.exit('Thiếu biến môi trường GOOGLE_TTS_API_KEY.')
+        key = os.environ.get('GOOGLE_TTS_API_KEY') or sys.exit('Missing GOOGLE_TTS_API_KEY environment variable.')
         req = urllib.request.Request(API.replace('text:synthesize', 'voices?languageCode=cmn-CN'),
                                      headers={'X-Goog-Api-Key': key})
         with urllib.request.urlopen(req, timeout=30) as r:
@@ -275,17 +275,17 @@ def main():
         n_plain = 0
         for g, kind, i, xml, plain, _, v in jobs:
             if kind == 'w' and g == genders[0]:
-                flag = '  <-- đọc chữ Hán thường (không ép pinyin)' if plain else ''
+                flag = '  <-- read as plain Chinese (pinyin not forced)' if plain else ''
                 n_plain += bool(plain)
                 print(f'{i:>3} {v["hz"]:<12} {v["py"]:<22} {xml[7:-8]}{flag}')
         chars = sum(len(j[3]) for j in jobs)
-        print(f'\n{len(jobs)} file sẽ tạo ({" + ".join(f"{GENDERS[g]}: {voices[g]}" for g in genders)}; '
-              f'~{chars} ký tự SSML); {n_plain} từ không ép được pinyin.')
+        print(f'\n{len(jobs)} files to generate ({" + ".join(f"{GENDERS[g]}: {voices[g]}" for g in genders)}; '
+              f'~{chars} SSML characters); {n_plain} words without forced pinyin.')
         return
 
     key = os.environ.get('GOOGLE_TTS_API_KEY')
     if not key:
-        sys.exit('Thiếu biến môi trường GOOGLE_TTS_API_KEY.')
+        sys.exit('Missing GOOGLE_TTS_API_KEY environment variable.')
 
     for g in genders:
         os.makedirs(os.path.join(OUT, g, 'w'), exist_ok=True)
@@ -303,9 +303,9 @@ def main():
                 data = synth(key, xml, voices[g], rate)
             except RuntimeError as e:
                 if 'does not exist' in str(e):
-                    sys.exit(f'Giọng "{voices[g]}" không hợp lệ: chạy --list-voices để xem tên đúng.\n{e}')
+                    sys.exit(f'Invalid voice "{voices[g]}": run --list-voices to see valid names.\n{e}')
                 if kind == 'w' and 'HTTP 400' in str(e) and '<phoneme' in xml:
-                    print('    Google không nhận pinyin, đọc chữ Hán thường.')
+                    print('    Google rejected the pinyin, reading plain Chinese instead.')
                     plain_xml = ssml(escape(re.sub(r'[()（）｜\s]', '', v['hz'])))
                     data = synth(key, plain_xml, voices[g], rate)
                 else:
@@ -315,14 +315,14 @@ def main():
             done += 1
         except RuntimeError as e:
             failed += 1
-            print(f'    LỖI: {e}')
+            print(f'    ERROR: {e}')
             if 'HTTP 401' in str(e) or 'HTTP 403' in str(e):
-                sys.exit('API key không hợp lệ hoặc chưa bật Cloud Text-to-Speech API, dừng lại.')
+                sys.exit('Invalid API key or Cloud Text-to-Speech API not enabled, stopping.')
         time.sleep(0.1)
 
     idx = write_index(voices)
-    summary = ', '.join(f'{GENDERS[g]}: {len(idx[g]["w"])} từ + {len(idx[g]["x"])} ví dụ' for g in GENDERS)
-    print(f'\nXong: tạo {done}, bỏ qua {skipped} (đã có), lỗi {failed}. Hiện có {summary}.')
+    summary = ', '.join(f'{GENDERS[g]}: {len(idx[g]["w"])} words + {len(idx[g]["x"])} examples' for g in GENDERS)
+    print(f'\nDone: {done} created, {skipped} skipped (already present), {failed} failed. Now have {summary}.')
 
 
 if __name__ == '__main__':
