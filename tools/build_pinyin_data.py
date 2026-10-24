@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate assets/pinyin-data.js for the pinyin syllable table page (pinyin.html).
+"""Generate assets/pinyin-data.js and audio/pinyin/ for the pinyin syllable table page (index.html).
 
 Reads the file list of the zispace/hanyu-pinyin-audio repo (data branch) via the GitHub API:
 - A syllable is included if it has playable audio (see below), or audio in at least MIN_SOURCES
@@ -7,22 +7,27 @@ Reads the file list of the zispace/hanyu-pinyin-audio repo (data branch) via the
 - Audio played on the page comes ONLY from the github-hugolpz/audio folder – recordings by Chen Wang
   (hugolpz/audio-cmn project, CC BY-SA). The other sources in the repo have no clear license,
   so they are not used for playback.
-The mp3 files are not copied into the project; the page loads them directly via jsDelivr.
+The playable mp3 files are downloaded (via jsDelivr) into audio/pinyin/ so the page has no
+runtime dependency on that repo. Existing files are kept; pass --force to download them again.
 
-Usage: python3 tools/build_pinyin_data.py
+Usage: python3 tools/build_pinyin_data.py [--force]
 """
+import argparse
 import json
 import os
 import re
 import urllib.request
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, 'assets', 'pinyin-data.js')
 TREE = 'https://api.github.com/repos/zispace/hanyu-pinyin-audio/git/trees/data?recursive=1'
 PLAY_DIR = 'github-hugolpz/audio'
 MIN_SOURCES = 3
-AUDIO_BASE = 'https://cdn.jsdelivr.net/gh/zispace/hanyu-pinyin-audio@data/' + PLAY_DIR + '/'
+CDN_BASE = 'https://cdn.jsdelivr.net/gh/zispace/hanyu-pinyin-audio@data/' + PLAY_DIR + '/'
+AUDIO_DIR = os.path.join(ROOT, 'audio', 'pinyin')
+AUDIO_BASE = 'audio/pinyin/'   # relative to the site root (index.html)
 
 INITIALS = ['', 'b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h', 'j', 'q', 'x',
             'zh', 'ch', 'sh', 'r', 'z', 'c', 's']
@@ -69,7 +74,30 @@ def audio_key(s):
     return s.replace('ü', 'v')
 
 
+def download(name, force):
+    path = os.path.join(AUDIO_DIR, name)
+    if not force and os.path.exists(path) and os.path.getsize(path) > 0:
+        return 'kept'
+    req = urllib.request.Request(CDN_BASE + name, headers={'User-Agent': 'pinyin-table'})
+    for attempt in range(3):
+        try:
+            with urllib.request.urlopen(req, timeout=30) as r:
+                data = r.read()
+            if not data:
+                raise OSError('empty file')
+            with open(path, 'wb') as f:
+                f.write(data)
+            return 'new'
+        except OSError as e:
+            err = e
+    return f'error: {err}'
+
+
 def main():
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument('--force', action='store_true', help='download audio files again even if present')
+    args = ap.parse_args()
+
     with urllib.request.urlopen(urllib.request.Request(TREE, headers={'User-Agent': 'pinyin-table'}), timeout=60) as r:
         tree = json.load(r)['tree']
     sources, tones = defaultdict(set), defaultdict(set)
@@ -100,6 +128,22 @@ def main():
             n_cells += 1
             n_play += bool(t)
         rows.append(row)
+
+    # download the playable files and drop stale ones
+    os.makedirs(AUDIO_DIR, exist_ok=True)
+    wanted = {f'{k}{t}.mp3' for k, ts in tones.items() for t in ts
+              if any(c and audio_key(c[0]) == k for row in rows for c in row)}
+    with ThreadPoolExecutor(8) as pool:
+        results = dict(zip(sorted(wanted), pool.map(lambda n: download(n, args.force), sorted(wanted))))
+    errors = {n: r for n, r in results.items() if r.startswith('error')}
+    for name in os.listdir(AUDIO_DIR):
+        if name.endswith('.mp3') and name not in wanted:
+            os.remove(os.path.join(AUDIO_DIR, name))
+    for n, r in sorted(errors.items()):
+        print(f'  {n}: {r}')
+    if errors:
+        raise SystemExit(f'{len(errors)} file tải lỗi – chạy lại script để thử tiếp.')
+    print(f'audio/pinyin: {len(wanted)} file ({sum(r == "new" for r in results.values())} mới tải)')
 
     data = {
         'audioBase': AUDIO_BASE,

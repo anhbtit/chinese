@@ -1,18 +1,20 @@
-# Flashcard
+# Chinese Pinyin & Flashcards
 
-Trang tạo flashcard từ file Excel (Chinese, Pinyin, Part of Speech, Meaning) – HTML/CSS/JS thuần, không cần build. Kèm sẵn bộ 500 từ HSK1 để học ngay.
+Trang tĩnh (HTML/CSS/JS thuần, không cần build) gồm bảng âm tiết pinyin có phát âm (trang chính) và trang
+tạo flashcard từ file Excel (Chinese, Pinyin, Part of Speech, Meaning), kèm sẵn bộ 500 từ HSK1. Ngôn ngữ mặc định: English.
 
 ## Cấu trúc
 
 ```
-index.html            trang chính
-assets/style.css      giao diện
-assets/app.js         logic (thẻ, cài đặt, nhập Excel, phát âm)
+index.html            trang chính: bảng âm tiết pinyin (assets/pinyin.{js,css}, assets/pinyin-data.js)
+audio/pinyin/         mp3 âm tiết pinyin (Chen Wang, CC BY-SA)
+tools/build_pinyin_data.py  tạo assets/pinyin-data.js + audio/pinyin/ từ repo zispace/hanyu-pinyin-audio
+flashcard.html        trang flashcard
+assets/style.css      giao diện chung
+assets/app.js         logic flashcard (thẻ, cài đặt, nhập Excel, phát âm)
 assets/hsk1-data.js   bộ 500 từ HSK1 có sẵn
 audio/{m,f}/{w,x}/    mp3 phát âm giọng nam/nữ (tuỳ chọn, tạo bằng tools/google_tts.py)
 tools/google_tts.py   tạo audio bằng Google Cloud Text-to-Speech
-pinyin.html           bảng âm tiết pinyin có phát âm (assets/pinyin.{js,css}, assets/pinyin-data.js)
-tools/build_pinyin_data.py  tạo assets/pinyin-data.js từ repo zispace/hanyu-pinyin-audio
 reference/            tài liệu gốc (không đưa lên git)
 ```
 
@@ -31,10 +33,11 @@ Bộ thẻ nhập vào lưu trong localStorage của trình duyệt, không tả
 
 ## Bảng âm tiết pinyin
 
-`pinyin.html` (nút **拼 Pinyin** trên trang chính): bấm một âm tiết để nghe và xem đủ các thanh.
-Audio là bản ghi của Chen Wang ([hugolpz/audio-cmn](https://github.com/hugolpz/audio-cmn), CC BY-SA),
-tải trực tiếp từ [zispace/hanyu-pinyin-audio](https://github.com/zispace/hanyu-pinyin-audio) qua jsDelivr,
-không copy vào repo. Cập nhật dữ liệu bảng: `python3 tools/build_pinyin_data.py`.
+`index.html` (nút **🗂 Flashcards** để sang trang flashcard, nút **拼 Pinyin** để quay lại): bấm một âm tiết
+để nghe và xem đủ các thanh. Audio trong `audio/pinyin/` là bản ghi của Chen Wang
+([hugolpz/audio-cmn](https://github.com/hugolpz/audio-cmn), CC BY-SA), lấy từ
+[zispace/hanyu-pinyin-audio](https://github.com/zispace/hanyu-pinyin-audio).
+Cập nhật dữ liệu + audio: `python3 tools/build_pinyin_data.py` (thêm `--force` để tải lại audio).
 
 ## Tạo audio (tuỳ chọn)
 
